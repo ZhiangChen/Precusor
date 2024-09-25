@@ -268,17 +268,17 @@ def main():
     ttk.Separator(control_frame, orient="horizontal").grid(row=4, column=0, columnspan=2, sticky="ew", padx=10, pady=5)
 
     # Slider from 0 to 600 mm
-    tk.Label(control_frame, text="Displacement (mm):").grid(row=5, column=0, padx=10, pady=5, sticky="w")
+    tk.Label(control_frame, text="Displacement (mm):").grid(row=5, column=0, padx=10, pady=5, sticky="ew")
     displacement_slider = tk.Scale(control_frame, from_=0, to=600, orient="horizontal", length=200)
     displacement_slider.grid(row=5, column=1, padx=10, pady=5, sticky="ew")
 
     # Button to send displacement to Arduino
     send_displacement_button = tk.Button(control_frame, text="Send Displacement", command=send_displacement)
-    send_displacement_button.grid(row=6, column=1, columnspan=1, padx=10, pady=5, sticky="ew")
+    send_displacement_button.grid(row=6, column=0, columnspan=1, padx=10, pady=5, sticky="ew")
     
     # Button to calibrate the displacement
     calibrate_button = tk.Button(control_frame, text="Calibrate Displacement", command=calibrate_displacement)
-    calibrate_button.grid(row=7, column=1, columnspan=1, padx=10, pady=5, sticky="ew")
+    calibrate_button.grid(row=6, column=1, columnspan=1, padx=10, pady=5, sticky="ew")
 
 
     # Divider for Option 1

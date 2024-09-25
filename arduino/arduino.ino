@@ -3,7 +3,7 @@
 
 #define STEP_PIN 2         // Pin for step signal
 #define DIR_PIN 3          // Pin for direction signal
-#define LEFT_LIMIT_PIN 4   // Pin for left limit switch
+#define LEFT_LIMIT_PIN 4   // Pin for left limit switch; motor is at the left side
 #define RIGHT_LIMIT_PIN 5  // Pin for right limit switch
 
 AccelStepper stepper(AccelStepper::DRIVER, STEP_PIN, DIR_PIN);  // Use AccelStepper in driver mode
