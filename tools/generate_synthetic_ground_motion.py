@@ -40,7 +40,7 @@ df = pd.DataFrame({
 })
 
 # Save to CSV file in the data folder
-csv_filename = "data/synthetic_ground_motion.csv"
+csv_filename = "../data/synthetic_ground_motion.csv"
 df.to_csv(csv_filename, index=False)
 print(f"Saved synthetic ground motion data to {csv_filename}")
 
@@ -55,7 +55,7 @@ plt.grid(True)
 plt.tight_layout()
 
 # Save the plot as a PNG file in the "data" folder
-plot_filename = "data/synthetic_ground_motion.png"
+plot_filename = "../data/synthetic_ground_motion.png"
 plt.savefig(plot_filename)
 print(f"Saved plot to {plot_filename}")
 

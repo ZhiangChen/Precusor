@@ -97,7 +97,7 @@ for tr in st_disp:
     # Save to CSV file
     csv_filename = f"truncated_displacement_{tr.stats.channel}.csv"
     # add to a folder called data
-    csv_filename = f"data/{csv_filename}"
+    csv_filename = f"../data/{csv_filename}"
     df.to_csv(csv_filename, index=False)
     print(f"Saved truncated displacement data to {csv_filename}")
 
@@ -115,6 +115,6 @@ for i, tr in enumerate(st_disp):
 
 plt.tight_layout()
 # Save the plot as a PNG file
-plt.savefig("data/displacement_plot.png")
+plt.savefig("../data/displacement_plot.png")
 
 plt.show()
