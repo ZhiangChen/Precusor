@@ -87,6 +87,10 @@ def generate_cosine_displacement():
         pga = float(acceleration_entry.get())
         cycle_number = int(cycles_entry.get())
 
+        if pga == 0:
+            messagebox.showerror("Error", "Peak Ground Acceleration cannot be zero.")
+            return
+
         PGV_2_PGA = pgv / pga
         F = 1./(2*np.pi*PGV_2_PGA)
         A = 9.807*pga/(4*np.pi**2*F**2)
@@ -137,7 +141,7 @@ def send_data():
         # Send the displacement data to Arduino
         for displacement in displacement_data[:, 1]:
             arduino.write(f"{displacement}\n".encode())
-            time.sleep(1/float(baud_var.get()))  # Set a delay based on the baud rate to ensure proper transmission
+            time.sleep(1/float(baud_var.get())*2)  # Set a delay based on the baud rate to ensure proper transmission
         
         messagebox.showinfo("Success", "Data sent to Arduino. Start the experiment.")
         # After sending all data, send a "START" command
@@ -184,7 +188,6 @@ def plot_data(data=None):
 
 def send_displacement():
     global arduino
-    print(f"Displacement set to {displacement} mm.")
     if arduino and arduino.is_open:
         displacement = displacement_slider.get()
         # First, write displacement to arduino and then send the command
@@ -205,9 +208,30 @@ def calibrate_displacement():
     else:
         messagebox.showerror("Error", "Arduino is not connected.")
 
+# Function to update the COM port list when the Combobox is clicked
+def update_com_ports(event):
+    global com_combobox
+    # Get the current selection to try to keep it selected if still available
+    current_selection = com_var.get()
+    # Get the updated list of COM ports
+    ports_list = list_ports()
+    if ports_list:
+        com_combobox['values'] = ports_list
+        com_combobox.config(state='normal')  # Enable the Combobox
+        # If the current selection is still available, keep it selected
+        if current_selection in ports_list:
+            com_combobox.set(current_selection)
+        else:
+            # Otherwise, set the last port as the default selection
+            com_combobox.set(ports_list[-1])
+    else:
+        com_combobox['values'] = ['No COM ports found']
+        com_combobox.set('No COM ports found')
+        com_combobox.config(state='disabled')  # Disable if no COM ports
+
 # Main function to create the GUI
 def main():
-    global plot_frame, connect_button, status_light, serial_text, displacement_slider
+    global plot_frame, connect_button, status_light, serial_text, displacement_slider, com_combobox, com_var
 
     # Create the main application window
     root = tk.Tk()
@@ -236,12 +260,34 @@ def main():
     serial_text.pack(fill="both", expand=True)
 
     # Dropdown menu for COM port selection
+    # tk.Label(control_frame, text="COM Port:").grid(row=1, column=0, padx=10, pady=5, sticky="ew")
+    # global com_var
+    # com_var = tk.StringVar(control_frame)
+    # com_var.set(list_ports()[-1])  # Set default COM port
+    # com_dropdown = tk.OptionMenu(control_frame, com_var, *list_ports())
+    # com_dropdown.grid(row=1, column=1, padx=10, pady=5, sticky="ew")
+
+    # Dropdown menu for COM port selection using ttk.Combobox
     tk.Label(control_frame, text="COM Port:").grid(row=1, column=0, padx=10, pady=5, sticky="ew")
-    global com_var
-    com_var = tk.StringVar(control_frame)
-    com_var.set(list_ports()[-1])  # Set default COM port
-    com_dropdown = tk.OptionMenu(control_frame, com_var, *list_ports())
-    com_dropdown.grid(row=1, column=1, padx=10, pady=5, sticky="ew")
+    com_var = tk.StringVar()
+    com_combobox = ttk.Combobox(control_frame, textvariable=com_var)
+
+    # Set the initial list of COM ports
+    ports_list = list_ports()
+    if ports_list:
+        com_combobox['values'] = ports_list
+        # set the last port as the default selection
+        com_combobox.set(ports_list[-1])
+    else:
+        com_combobox['values'] = ['No COM ports found']
+        com_combobox.set('No COM ports found')
+        com_combobox.config(state='disabled')  # Disable if no COM ports
+
+    com_combobox.grid(row=1, column=1, padx=10, pady=5, sticky="ew")
+
+    # Bind the <<ComboboxDropdown>> event to update the COM port list
+    com_combobox.bind('<<ComboboxDropdown>>', update_com_ports)
+
 
     # Dropdown menu for baud rate selection
     tk.Label(control_frame, text="Baud Rate:").grid(row=2, column=0, padx=10, pady=5, sticky="ew")
