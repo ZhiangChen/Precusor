@@ -3,8 +3,8 @@
 
 #define STEP_PIN 2  // Pin for step signal
 #define DIR_PIN 3   // Pin for direction signal
-#define LEFT_LIMIT_PIN 4  // Pin for left limit switch
-#define RIGHT_LIMIT_PIN 5  // Pin for right limit switch
+//#define LEFT_LIMIT_PIN 4  // Pin for left limit switch
+//#define RIGHT_LIMIT_PIN 5  // Pin for right limit switch
 
 AccelStepper stepper(AccelStepper::DRIVER, STEP_PIN, DIR_PIN);  // Use AccelStepper in driver mode
 
@@ -12,7 +12,7 @@ const int pulsePerRev = 200; // Number of steps per revolution
 const float maxRPM = 1200;  // Increase maximum speed in RPM
 const float lead = 0.02;  // Distance traveled per revolution in meters
 const float maxAcceleration = 1.1; // Maximum acceleration in g
-const float totalLength = 0.6; // Total length of the shakebot in meters
+//const float totalLength = 0.6; // Total length of the shakebot in meters
 
 const int maxDisplacement = 400;  // Maximum number of displacement points to handle
 volatile float displacementData[maxDisplacement];  // Array to store incoming displacement data
@@ -23,8 +23,8 @@ volatile bool executeMotion = false;  // Flag to start executing motion
 unsigned long startTime = 0;
 unsigned long endTime = 0;
 
-bool isSettingDisplacement = false;  // Flag to indicate setting displacement data
-bool isCalibrating = false;  // Flag to indicate calibration (moving to left limit)
+//bool isSettingDisplacement = false;  // Flag to indicate setting displacement data
+//bool isCalibrating = false;  // Flag to indicate calibration (moving to left limit)
 int originSteps = 0;  // Steps to move to the origin (left limit)
 
 unsigned long baudRate = 250000;  // Or even higher
@@ -34,8 +34,8 @@ void setup() {
   stepper.setMaxSpeed(pulsePerRev * maxRPM);  // Set max speed for the stepper motor (adjust as needed)
   stepper.setAcceleration(int(maxAcceleration*pulsePerRev*9.8/lead));  // Set acceleration (adjust as needed)
  
-  pinMode(LEFT_LIMIT_PIN, INPUT_PULLUP);  // Initialize limit switch pin with pullup resistor
-  pinMode(RIGHT_LIMIT_PIN, INPUT_PULLUP);  // Initialize right limit switch pin 
+  //pinMode(LEFT_LIMIT_PIN, INPUT_PULLUP);  // Initialize limit switch pin with pullup resistor
+  //pinMode(RIGHT_LIMIT_PIN, INPUT_PULLUP);  // Initialize right limit switch pin 
 
   Timer1.initialize(10000);  // 10 ms timer interrupt (100 Hz)
   Timer1.attachInterrupt(updateMotorPosition);  // Attach the interrupt handler
@@ -64,18 +64,21 @@ void loop() {
       // If we receive the "START" command, set the flag to start executing the motion
       executeMotion = true;
     }
+    /*
     else if (command == "SET_DISPLACEMENT") {
       setDisplacementData();  // Set displacement data
     }
     else if (command == "CALIBRATE_DISPLACEMENT") {
       startCalibration();  // Begin the calibration process
     }
+    */
     else {
       receiveDisplacementData(command);  // Process normal displacement data
     }
   }
 }
 
+/*
 void setDisplacementData() {
   // Move the motor slowly to the left until the left limit switch is triggered
   Serial.println("Starting moving displacement...");
@@ -95,6 +98,7 @@ void startCalibration() {
   stepper.moveTo(- (totalLength / lead + 10) * pulsePerRev);  // Move left indefinitely (until the limit switch is hit)
   isCalibrating = true;  // Set the flag to indicate calibration mode
 }
+*/
 
 // Function to receive displacement data
 void receiveDisplacementData(String dataString) {
@@ -111,6 +115,7 @@ void receiveDisplacementData(String dataString) {
 
 // Interrupt Service Routine (ISR) to update the motor position at 100 Hz
 void updateMotorPosition() {
+  /*
     if (isCalibrating) {
       if (digitalRead(LEFT_LIMIT_PIN) == LOW ) {  // If left limit switch is triggered
         stepper.stop();  // Stop the motor
@@ -173,6 +178,7 @@ void updateMotorPosition() {
     }
 
   }
+  */
 
   if (dataSize == 0 || !executeMotion) 
   {
