@@ -136,6 +136,11 @@ void updateMotorPosition() {
 
         // Calibration is complete
         isCalibrating = false;  // Exit calibration mode
+        // Move to the position based on displacementData[0]
+        int stepsToMove = convertDisplacementToSteps(displacementData[0]);
+        stepper.setMaxSpeed(pulsePerRev * maxRPM);  // Restore max speed
+        stepper.moveTo(stepsToMove);  // Move to the first displacement
+        dataSize = 0; // Reset data size to indicate that no data is left
         Serial.println("Calibration complete.");
         return;
       }
@@ -154,6 +159,8 @@ void updateMotorPosition() {
       int stepsToMove = convertDisplacementToSteps(displacementData[0]);
       stepper.setMaxSpeed(pulsePerRev * maxRPM);  // Restore max speed
       stepper.moveTo(stepsToMove);  // Move to the first displacement
+      dataSize = 0; // Reset data size to indicate that no data is left
+      Serial.println("Setting displacement complete.");
       return;  // Do nothing if setting displacement data
     }
   }
