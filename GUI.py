@@ -108,11 +108,22 @@ def load_csv_file():
     file_path = filedialog.askopenfilename(filetypes=[("CSV files", "*.csv")])
     if file_path:
         try:
+            # Load the CSV file using pandas
             df = pd.read_csv(file_path)
-            displacement_data = df['displacement'].values  # Assuming the CSV has a 'displacement' column
+            
+            # Assuming the CSV has 'Time (s)' and 'Displacement (m)' columns
+            time = df['Time (s)'].values
+            displacement = df['Displacement (m)'].values
+
+            # Combine time and displacement into a 2D array
+            displacement_data = np.column_stack((time, displacement))
+
+            # Plot the loaded data
             plot_data(displacement_data)
+            
         except Exception as e:
             messagebox.showerror("Error", f"Failed to load CSV: {e}")
+
 
 # Function to send data to Arduino
 def send_data():

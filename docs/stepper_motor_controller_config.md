@@ -2,11 +2,11 @@
 Our shakebot has configuration of the stepper motor controller as follows.
 
 ## Pulse/rev ratio
-By defautl, we set the pulse/rev ratio as 10000:
+By defautl, we set the pulse/rev ratio as 400:
 
 | SW1  | SW2  | SW3  | SW4  |
 |------|------|------|------|
-| OFF  | ON   | OFF  | OFF  |
+| OFF  | ON   | ON   | ON   |
 
 
 ## Mode setting 
