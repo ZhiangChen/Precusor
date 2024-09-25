@@ -73,9 +73,6 @@ void loop() {
     else {
       receiveDisplacementData(command);  // Process normal displacement data
     }
-    else {
-      receiveDisplacementData(command);  // Process normal displacement data
-    }
   }
 }
 
@@ -83,7 +80,7 @@ void setDisplacementData() {
   // Move the motor slowly to the left until the left limit switch is triggered
   Serial.println("Starting moving displacement...");
   stepper.setMaxSpeed(pulsePerRev/2);  // Slow speed for calibration
-  stepper.moveTo(-totalLength / lead * pulsePerRev);  // Move left indefinitely (until the limit switch is hit)
+  stepper.moveTo(-(totalLength / lead + 10)* pulsePerRev);  // Move left indefinitely (until the limit switch is hit)
   isSettingDisplacement = true;  // Set the flag to indicate set_displacement mode
 }
 
@@ -95,7 +92,7 @@ void startCalibration() {
   // First, move to the left limit
   Serial.println("Moving to the left limit...");
 
-  stepper.moveTo(-totalLength / lead * pulsePerRev);  // Move left indefinitely (until the limit switch is hit)
+  stepper.moveTo(- (totalLength / lead + 10) * pulsePerRev);  // Move left indefinitely (until the limit switch is hit)
   isCalibrating = true;  // Set the flag to indicate calibration mode
 }
 
@@ -124,7 +121,7 @@ void updateMotorPosition() {
         // Now move to the right limit
         Serial.println("Moving to the right limit...");
         stepper.setMaxSpeed(pulsePerRev / 2);  // Slow speed for calibration
-        stepper.moveTo(totalLength / lead * pulsePerRev);  // Move right indefinitely (until the right limit switch is hit)
+        stepper.moveTo((totalLength / lead + 10) * pulsePerRev);  // Move right indefinitely (until the right limit switch is hit)
         return;  // Wait for the next interrupt to check the right limit switch
       }
       
@@ -134,23 +131,27 @@ void updateMotorPosition() {
         Serial.print("Right limit reached. Steps: ");
         Serial.println(rightLimitSteps);
 
-        // Calibration is complete
-        isCalibrating = false;  // Exit calibration mode
         // Move to the position based on displacementData[0]
         int stepsToMove = convertDisplacementToSteps(displacementData[0]);
         stepper.setMaxSpeed(pulsePerRev * maxRPM);  // Restore max speed
         stepper.moveTo(stepsToMove);  // Move to the first displacement
-        dataSize = 0; // Reset data size to indicate that no data is left
-        Serial.println("Calibration complete.");
         return;
       }
+
+      if (stepper.distanceToGo() == 0) {
+        stepper.stop();  // Stop the motor
+        Serial.println("Completed calibration.");
+        isCalibrating = false;  // Exit calibration mode
+        dataSize = 0; // Reset data size to indicate that no data is left
+        return;
+      }
+
     }
 
   if (isSettingDisplacement) {
     if (digitalRead(LEFT_LIMIT_PIN) == LOW) {  // If left limit switch is triggered
       stepper.stop();  // Stop the motor
-      isSettingDisplacement = false;  // Exit calibration mode
-      Serial.println("Calibration complete. Moving to displacementData[0].");
+      Serial.println("Moving to displacementData[0].");
 
       // get the current position of the motor
       originSteps = -stepper.currentPosition();
@@ -159,10 +160,18 @@ void updateMotorPosition() {
       int stepsToMove = convertDisplacementToSteps(displacementData[0]);
       stepper.setMaxSpeed(pulsePerRev * maxRPM);  // Restore max speed
       stepper.moveTo(stepsToMove);  // Move to the first displacement
-      dataSize = 0; // Reset data size to indicate that no data is left
-      Serial.println("Setting displacement complete.");
       return;  // Do nothing if setting displacement data
     }
+
+    // check if the motor reaches the distance
+    if (stepper.distanceToGo() == 0) {
+      stepper.stop();  // Stop the motor
+      Serial.println("Displacement set.");
+      isSettingDisplacement = false;  // Exit setting displacement mode
+      dataSize = 0; // Reset data size to indicate that no data is left
+      return;  // Do nothing if setting displacement data
+    }
+
   }
 
   if (dataSize == 0 || !executeMotion) 
