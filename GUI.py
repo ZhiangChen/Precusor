@@ -182,17 +182,40 @@ def plot_data(data=None):
     canvas.draw()
     canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=True)
 
+def send_displacement():
+    global arduino
+    print(f"Displacement set to {displacement} mm.")
+    if arduino and arduino.is_open:
+        displacement = displacement_slider.get()
+        # First, write displacement to arduino and then send the command
+        arduino.write(f"{displacement}\n".encode())
+        time.sleep(0.1)
+        arduino.write("SET_DISPLACEMENT\n".encode())
+    else:
+        messagebox.showerror("Error", "Arduino is not connected.")
+
+def calibrate_displacement():
+    global arduino
+    if arduino and arduino.is_open:
+        displacement = displacement_slider.get()
+        arduino.write(f"{displacement}\n".encode())
+        time.sleep(0.1)
+        arduino.write("CALIBRATE_DISPLACEMENT\n".encode())
+        messagebox.showinfo("Displacement Calibration", "Calibration started. Please wait for the process to complete.")
+    else:
+        messagebox.showerror("Error", "Arduino is not connected.")
+
 # Main function to create the GUI
 def main():
-    global plot_frame, connect_button, status_light, serial_text
+    global plot_frame, connect_button, status_light, serial_text, displacement_slider
 
     # Create the main application window
     root = tk.Tk()
     root.title("Seismove Shakebot v2.0")
-    root.geometry("1000x600")  # Set the default window size (increased height for the text widget)
+    root.geometry("1200x600")  # Set the default window size (increased height for the text widget)
 
     # Configure grid layout weights to allow resizing
-    for i in range(16):  # Increased row count for new text widget
+    for i in range(19):  # Increased row count for new text widget
         root.grid_rowconfigure(i, weight=1)
     root.grid_columnconfigure(0, weight=1)
     root.grid_columnconfigure(1, weight=1)
@@ -237,47 +260,59 @@ def main():
     connect_button = tk.Button(control_frame, text="Connect to Arduino", command=connect_arduino)
     connect_button.grid(row=3, column=1, padx=10, pady=5, sticky="ew")
 
-    # Selection for Option 1 (generate cosine) or Option 2 (load CSV)
-    tk.Label(control_frame, text="Select Option:").grid(row=4, column=0, padx=10, pady=5, sticky="w")
-    option_var = tk.IntVar(value=1)  # Default selection is Option 1
-    tk.Radiobutton(control_frame, text="Option 1", variable=option_var, value=1).grid(row=4, column=1, padx=10, pady=5, sticky="w")
-    tk.Radiobutton(control_frame, text="Option 2", variable=option_var, value=2).grid(row=4, column=1, padx=100, pady=5, sticky="w")
+    # Divider for displacement control
+    ttk.Separator(control_frame, orient="horizontal").grid(row=4, column=0, columnspan=2, sticky="ew", padx=10, pady=5)
+
+    # Slider from 0 to 600 mm
+    tk.Label(control_frame, text="Displacement (mm):").grid(row=5, column=0, padx=10, pady=5, sticky="w")
+    displacement_slider = tk.Scale(control_frame, from_=0, to=600, orient="horizontal", length=200)
+    displacement_slider.grid(row=5, column=1, padx=10, pady=5, sticky="ew")
+
+    # Button to send displacement to Arduino
+    send_displacement_button = tk.Button(control_frame, text="Send Displacement", command=send_displacement)
+    send_displacement_button.grid(row=6, column=1, columnspan=1, padx=10, pady=5, sticky="ew")
+    
+    # Button to calibrate the displacement
+    calibrate_button = tk.Button(control_frame, text="Calibrate Displacement", command=calibrate_displacement)
+    calibrate_button.grid(row=7, column=1, columnspan=1, padx=10, pady=5, sticky="ew")
+
 
     # Divider for Option 1
-    ttk.Separator(control_frame, orient="horizontal").grid(row=5, column=0, columnspan=2, sticky="ew", padx=10, pady=5)
-    tk.Label(control_frame, text="Option 1").grid(row=6, column=0, columnspan=2, padx=10, pady=5)
+    ttk.Separator(control_frame, orient="horizontal").grid(row=8, column=0, columnspan=2, sticky="ew", padx=10, pady=5)
+    tk.Label(control_frame, text="Option 1").grid(row=9, column=0, columnspan=2, padx=10, pady=5)
 
     # Inputs for generating cosine displacement (Option 1)
-    tk.Label(control_frame, text="Peak Ground Velocity:").grid(row=7, column=0, padx=10, pady=5, sticky="ew")
+    tk.Label(control_frame, text="Peak Ground Velocity (m/s):").grid(row=10, column=0, padx=10, pady=5, sticky="ew")
     global velocity_entry
     velocity_entry = tk.Entry(control_frame)
-    velocity_entry.grid(row=7, column=1, padx=10, pady=5, sticky="ew")
+    velocity_entry.grid(row=10, column=1, padx=10, pady=5, sticky="ew")
 
-    tk.Label(control_frame, text="Peak Ground Acceleration:").grid(row=8, column=0, padx=10, pady=5, sticky="ew")
+    tk.Label(control_frame, text="Peak Ground Acceleration (m/s^2):").grid(row=11, column=0, padx=10, pady=5, sticky="ew")
     global acceleration_entry
     acceleration_entry = tk.Entry(control_frame)
-    acceleration_entry.grid(row=8, column=1, padx=10, pady=5, sticky="ew")
+    acceleration_entry.grid(row=11, column=1, padx=10, pady=5, sticky="ew")
 
-    tk.Label(control_frame, text="Cycle Number:").grid(row=9, column=0, padx=10, pady=5, sticky="ew")
+    tk.Label(control_frame, text="Cycle Number:").grid(row=12, column=0, padx=10, pady=5, sticky="ew")
     global cycles_entry
     cycles_entry = tk.Entry(control_frame)
-    cycles_entry.grid(row=9, column=1, padx=10, pady=5, sticky="ew")
+    cycles_entry.grid(row=12, column=1, padx=10, pady=5, sticky="ew")
 
     # Button to generate cosine displacement
     generate_button = tk.Button(control_frame, text="Generate Cosine Displacement", command=generate_cosine_displacement)
-    generate_button.grid(row=10, column=0, columnspan=2, padx=10, pady=5, sticky="ew")
+    generate_button.grid(row=13, column=0, columnspan=2, padx=10, pady=5, sticky="ew")
 
     # Divider for Option 2
-    ttk.Separator(control_frame, orient="horizontal").grid(row=11, column=0, columnspan=2, sticky="ew", padx=10, pady=5)
-    tk.Label(control_frame, text="Option 2").grid(row=12, column=0, columnspan=2, padx=10, pady=5)
+    ttk.Separator(control_frame, orient="horizontal").grid(row=14, column=0, columnspan=2, sticky="ew", padx=10, pady=5)
+    tk.Label(control_frame, text="Option 2").grid(row=15, column=0, columnspan=2, padx=10, pady=5)
 
     # Button to load CSV ground motion file (Option 2)
     load_button = tk.Button(control_frame, text="Load CSV Ground Motion File", command=load_csv_file)
-    load_button.grid(row=13, column=0, columnspan=2, padx=10, pady=5, sticky="ew")
+    load_button.grid(row=16, column=0, columnspan=2, padx=10, pady=5, sticky="ew")
 
     # Button to send data to Arduino
+    ttk.Separator(control_frame, orient="horizontal").grid(row=17, column=0, columnspan=2, sticky="ew", padx=10, pady=5)
     send_button = tk.Button(control_frame, text="Send Data to Arduino", command=send_data)
-    send_button.grid(row=14, column=0, columnspan=2, padx=10, pady=5, sticky="ew")
+    send_button.grid(row=18, column=0, columnspan=2, padx=10, pady=5, sticky="ew")
 
     # Initialize an empty plot
     plot_data()
