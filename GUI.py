@@ -17,6 +17,13 @@ canvas = None
 connected = False  # Track connection status
 sample_rate = 100  # Default sample rate
 
+pulsePerRev = 200 # Number of steps per revolution
+maxRPM = 1200 # Increase maximum speed in RPM
+lead = 0.02 # Distance traveled per revolution in meters
+maxAcceleration = 1.1 # Maximum acceleration in g
+totalLength = 0.6 # Total length of the shakebot in meters
+
+
 # Function to list available COM ports
 def list_ports():
     ports = serial.tools.list_ports.comports()
@@ -42,7 +49,10 @@ def connect_arduino():
             arduino.close()  # Close the current connection
             arduino = serial.Serial(com_port, baudrate=int(baud_rate), timeout=1)  # Reopen with the new baud rate
 
-            # Step 4: Update the status and button
+            # Step 4: Send the shakebot parameters to Arduino
+            send_parameters()
+
+            # Step 5: Update the status and button
             connected = True
             update_status_light("green")  # Change status light to green
             connect_button.config(text="Disconnect")  # Update button text to "Disconnect"
@@ -58,6 +68,16 @@ def connect_arduino():
         connected = False
         update_status_light("red")  # Change status light back to red
         connect_button.config(text="Connect to Arduino")  # Update button text to "Connect to Arduino"
+
+def send_parameters():
+    global arduino
+    try:
+        # Create a parameter string in the format:
+        # SET_PARAMS pulsePerRev=<value> maxRPM=<value> lead=<value> maxAcceleration=<value> totalLength=<value>
+        param_str = f"SET_PARAMS pulsePerRev={pulsePerRev} maxRPM={maxRPM} lead={lead} maxAcceleration={maxAcceleration} totalLength={totalLength}\n"
+        arduino.write(param_str.encode())
+    except Exception as e:
+        messagebox.showerror("Error", f"Failed to send parameters: {e}")
 
 # Function to read serial data from Arduino and display it in the text widget
 def read_serial_data():
@@ -128,26 +148,99 @@ def load_csv_file():
         except Exception as e:
             messagebox.showerror("Error", f"Failed to load CSV: {e}")
 
+def convert_displacement_to_steps(displacement):
+    """
+    Convert displacement in meters to motor steps.
 
-# Function to send data to Arduino
+    Args:
+        displacement (float or np.ndarray): Displacement(s) in meters.
+
+    Returns:
+        int or np.ndarray: Corresponding motor step count(s).
+    """
+    return (displacement / lead * pulsePerRev).astype(int) if isinstance(displacement, np.ndarray) else int(displacement / lead * pulsePerRev)
+
+
+# # Function to send data to Arduino
+# def send_data():
+#     global displacement_data
+#     # check if there is data to send, check the shape of the array
+#     if displacement_data.size == 0:
+#         messagebox.showwarning("No Data", "No data to send. Please generate or load ground motion data.")
+#         return
+
+#     steps_all = convert_displacement_to_steps(displacement_data[:, 1])
+
+#     # examine if any steps in steps_all are within the limits. Int type in ardunio is 16 bit, which is 32767
+#     if any(np.abs(steps_all) > 32767):
+#         messagebox.showerror("Error", "Displacement exceeds the maximum limit. Please reduce the displacement.")
+#         return
+
+#     if arduino and arduino.is_open:
+#         # Send the displacement data to Arduino
+#         for steps in steps_all:
+#             arduino.write(f"{steps}\n".encode())
+#             time.sleep(1/float(baud_var.get()))  # Set a delay based on the baud rate to ensure proper transmission
+        
+#         messagebox.showinfo("Success", "Data sent to Arduino. Start the experiment.")
+#         # After sending all data, send a "START" command
+#         arduino.write("START\n".encode())
+#     else:
+#         messagebox.showerror("Error", "Arduino is not connected.")
+
+# Function to send data to Arduino with confirmation before starting the experiment
 def send_data():
     global displacement_data
-    # check if there is data to send, check the shape of the array
+    # Check if there is data to send
     if displacement_data.size == 0:
         messagebox.showwarning("No Data", "No data to send. Please generate or load ground motion data.")
         return
 
-    if arduino and arduino.is_open:
-        # Send the displacement data to Arduino
-        for displacement in displacement_data[:, 1]:
-            arduino.write(f"{displacement}\n".encode())
-            time.sleep(1/float(baud_var.get()))  # Set a delay based on the baud rate to ensure proper transmission
-        
-        messagebox.showinfo("Success", "Data sent to Arduino. Start the experiment.")
-        # After sending all data, send a "START" command
-        arduino.write("START\n".encode())
-    else:
-        messagebox.showerror("Error", "Arduino is not connected.")
+    try:
+        # Extract all displacement values from the second column (index 1)
+        displacements = displacement_data[:, 1]
+
+        # Convert all displacements to step counts
+        steps_all = convert_displacement_to_steps(displacements)
+
+        # Ensure steps_all is a NumPy array for vectorized operations
+        steps_all = np.array(steps_all)
+
+        # Check if any step count exceeds Arduino's int limit
+        if np.any(np.abs(steps_all) > 2147483647):
+            messagebox.showerror("Error", "Displacement exceeds the maximum limit. Please reduce the displacement.")
+            return
+
+        if arduino and arduino.is_open:
+            # Send the step counts to Arduino
+            for steps in steps_all:
+                arduino.write(f"{steps}\n".encode())
+                # Wait for acknowledgment (optional, based on Arduino implementation)
+                # ack = arduino.readline().decode().strip()
+                # if ack != "STEP_RECEIVED":
+                #     messagebox.showwarning("Warning", f"Unexpected acknowledgment: {ack}")
+                #     break
+                time.sleep(0.001)  # 1 ms delay for high baud rates
+
+            # After sending all step counts, prompt for confirmation to start the experiment
+            response = messagebox.askyesno(
+                "Confirmation",
+                "Data sent to Arduino successfully.\nDo you want to start the experiment?"
+            )
+
+            if response:
+                # User confirmed to start the experiment
+                arduino.write("START\n".encode())
+            else:
+                # User canceled the experiment start
+                arduino.write("CANCEL\n".encode())
+        else:
+            messagebox.showerror("Error", "Arduino is not connected.")
+
+    except Exception as e:
+        messagebox.showerror("Error", f"Failed to send data: {e}")
+
+
 
 # Function to plot the displacement data or display an empty canvas
 def plot_data(data=None):
@@ -215,7 +308,7 @@ def main():
     # Create the main application window
     root = tk.Tk()
     root.title("Seismove Shakebot v2.0")
-    root.geometry("1200x600")  # Set the default window size (increased height for the text widget)
+    root.geometry("1250x650")  # Set the default window size (increased height for the text widget)
 
     # Configure grid layout weights to allow resizing
     for i in range(19):  # Increased row count for new text widget

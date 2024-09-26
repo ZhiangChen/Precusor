@@ -8,14 +8,14 @@
 
 AccelStepper stepper(AccelStepper::DRIVER, STEP_PIN, DIR_PIN);  // Use AccelStepper in driver mode
 
-const int pulsePerRev = 200;        // Number of steps per revolution
-const float maxRPM = 1200;          // Increase maximum speed in RPM
-const float lead = 0.02;            // Distance traveled per revolution in meters
-const float maxAcceleration = 1.1;  // Maximum acceleration in g
-const float totalLength = 0.6;      // Total length of the shakebot in meters
+int pulsePerRev = 200;        // Number of steps per revolution
+float maxRPM = 1200;          // Increase maximum speed in RPM
+float lead = 0.02;            // Distance traveled per revolution in meters
+float maxAcceleration = 1.1;  // Maximum acceleration in g
+float totalLength = 0.6;      // Total length of the shakebot in meters
 
-const int maxDisplacement = 350;                   // Maximum number of displacement points to handle
-volatile float displacementData[maxDisplacement];  // Array to store incoming displacement data
+const int maxDisplacement = 100*3;                   // Maximum number of displacement points to handle
+volatile long displacementData[maxDisplacement];  // Array to store incoming displacement data
 volatile int dataSize = 0;                         // Number of data points received
 volatile int currentIndex = 0;                     // Current index in the displacement array
 volatile bool executeMotion = false;               // Flag to start executing motion
@@ -51,16 +51,61 @@ void loop() {
       if (newBaudRate > 0) {
         changeBaudRate(newBaudRate);  // Change the baud rate
       }
-    } else if (command == "START") {
+    }  else if (command.startsWith("SET_PARAMS")) {
+    // Example command:
+    // SET_PARAMS pulsePerRev=200 maxRPM=1200 lead=0.02 maxAcceleration=1.1 totalLength=0.6
+
+    // Split the command into tokens
+    int pulseIdx = command.indexOf("pulsePerRev=");
+    int rpmIdx = command.indexOf("maxRPM=");
+    int leadIdx = command.indexOf("lead=");
+    int accIdx = command.indexOf("maxAcceleration=");
+    int lengthIdx = command.indexOf("totalLength=");
+
+      if (pulseIdx != -1 && rpmIdx != -1 && leadIdx != -1 && accIdx != -1 && lengthIdx != -1) {
+        pulsePerRev = command.substring(pulseIdx + 12, command.indexOf(' ', pulseIdx)).toInt();
+        maxRPM = command.substring(rpmIdx + 7, command.indexOf(' ', rpmIdx)).toFloat();
+        lead = command.substring(leadIdx + 5, command.indexOf(' ', leadIdx)).toFloat();
+        maxAcceleration = command.substring(accIdx + 16, command.indexOf(' ', accIdx)).toFloat();
+        totalLength = command.substring(lengthIdx + 12).toFloat();  // Assuming it's the last parameter
+
+        // Update motor settings based on new parameters
+        stepper.setMaxSpeed(pulsePerRev * maxRPM);
+        stepper.setAcceleration(int(maxAcceleration * pulsePerRev * 9.8 / lead));
+
+        Serial.println("Parameters updated successfully.");
+        // print out the updated parameters using F macro
+        Serial.print(F("totalLength: "));
+        Serial.println(totalLength);
+        Serial.print(F("pulsePerRev: "));
+        Serial.println(pulsePerRev);
+        Serial.print(F("maxRPM: "));
+        Serial.println(maxRPM);
+        Serial.print(F("lead: "));
+        Serial.println(lead);
+        Serial.print(F("maxAcceleration: "));
+        Serial.println(maxAcceleration);
+
+        
+      } else {
+        Serial.println(F("Invalid parameters."));
+      }
+    }
+    
+    else if (command == "START") {
       // print the number of data points to be executed
       Serial.println("Number of data points to be executed: " + String(dataSize));
-      // print all displacement data in mm and steps
-      //for (int i = 0; i < dataSize; i++) {
-      //  Serial.println("Displacement " + String(i) + ": " + String(displacementData[i]) + " mm (" + String(convertDisplacementToSteps(displacementData[i])) + " steps)");
-      //}
-      Serial.println("Start executing displacement data.");
+      Serial.println(F("Start executing displacement data."));
       // If we receive the "START" command, set the flag to start executing the motion
       executeMotion = true;
+    }
+
+    else if (command == "CANCEL"){
+      stepper.stop();  // Stop the motor
+      Serial.println("Motion cancelled.");
+      executeMotion = false;  // Stop execution after finishing the current displacement data
+      dataSize = 0;           // Reset data size to indicate that no data is left
+      currentIndex = 0;       // Reset the current index
     }
     
     else if (command == "SET_DISPLACEMENT") {
@@ -72,7 +117,7 @@ void loop() {
     }
     
     else {
-      receiveDisplacementData(command);  // Process normal displacement data
+      receiveStepData(command);  // Process normal displacement data
     }
   }
 }
@@ -80,7 +125,7 @@ void loop() {
 
 void setDisplacementData() {
   // Move the motor slowly to the left until the left limit switch is triggered
-  Serial.println("Starting moving displacement...");
+  Serial.println(F("Starting moving displacement..."));
   stepper.setMaxSpeed(pulsePerRev/2);  // Slow speed for calibration
   stepper.moveTo(-(totalLength / lead + 10)* pulsePerRev);  // Move left indefinitely (until the limit switch is hit)
   isSettingDisplacement = true;  // Set the flag to indicate set_displacement mode
@@ -89,27 +134,27 @@ void setDisplacementData() {
 
 void startCalibration() {
   // Move the motor slowly to the left until the left limit switch is triggered
-  Serial.println("Starting calibration...");
+  Serial.println(F("Starting calibration..."));
   stepper.setMaxSpeed(pulsePerRev / 2);  // Slow speed for calibration
 
   // First, move to the left limit
-  Serial.println("Moving to the left limit...");
+  Serial.println(F("Moving to the left limit..."));
 
   stepper.moveTo(- (totalLength / lead + 10) * pulsePerRev);  // Move left indefinitely (until the limit switch is hit)
   isCalibrating = true;  // Set the flag to indicate calibration mode
 }
 
 
-// Function to receive displacement data
-void receiveDisplacementData(String dataString) {
-  float displacement = dataString.toFloat();
+// Function to receive step counts
+void receiveStepData(String dataString) {
+  long steps = dataString.toInt();
   if (dataSize < maxDisplacement) {
     noInterrupts();
-    displacementData[dataSize] = displacement;
+    displacementData[dataSize] = steps;  // Store steps directly
     dataSize++;
     interrupts();
   } else {
-    Serial.println("Displacement data buffer full.");
+    Serial.println(F("Step data buffer full."));
   }
 }
 
@@ -120,11 +165,11 @@ void updateMotorPosition() {
       if (digitalRead(LEFT_LIMIT_PIN) == LOW ) {  // If left limit switch is triggered
         stepper.stop();  // Stop the motor
         stepper.setCurrentPosition(0);
-        Serial.print("Left limit reached");
+        Serial.print(F("Left limit reached"));
 
 
         // Now move to the right limit
-        Serial.println("Moving to the right limit...");
+        Serial.println(F("Moving to the right limit..."));
         stepper.setMaxSpeed(pulsePerRev / 2);  // Slow speed for calibration
         stepper.moveTo((totalLength / lead + 10) * pulsePerRev);  // Move right indefinitely (until the right limit switch is hit)
         return;  // Wait for the next interrupt to check the right limit switch
@@ -133,19 +178,18 @@ void updateMotorPosition() {
       if (digitalRead(RIGHT_LIMIT_PIN) == LOW) {  // If right limit switch is triggered
         stepper.stop();  // Stop the motor
         int rightLimitSteps = stepper.currentPosition();  // Record the motor position as the right limit
-        Serial.print("Right limit reached. Steps: ");
+        Serial.print(F("Right limit reached. Steps: "));
         Serial.println(rightLimitSteps);
 
         // Move to the position based on displacementData[0]
-        int stepsToMove = convertDisplacementToSteps(displacementData[0]);
         stepper.setMaxSpeed(pulsePerRev * maxRPM);  // Restore max speed
-        stepper.moveTo(stepsToMove);  // Move to the first displacement
+        stepper.moveTo(displacementData[0]);  // Move to the first displacement
         return;
       }
 
       if (stepper.distanceToGo() == 0) {
         stepper.stop();  // Stop the motor
-        Serial.println("Completed calibration.");
+        Serial.println(F("Completed calibration."));
         isCalibrating = false;  // Exit calibration mode
         dataSize = 0; // Reset data size to indicate that no data is left
         stepper.setCurrentPosition(0);
@@ -157,21 +201,20 @@ void updateMotorPosition() {
   if (isSettingDisplacement) {
     if (digitalRead(LEFT_LIMIT_PIN) == LOW) {  // If left limit switch is triggered
       stepper.stop();  // Stop the motor
-      Serial.println("Moving to displacementData[0].");
+      Serial.println(F("Moving to displacementData[0]."));
 
       stepper.setCurrentPosition(0);
 
       // Move to the position based on displacementData[0]
-      int stepsToMove = convertDisplacementToSteps(displacementData[0]);
       stepper.setMaxSpeed(pulsePerRev * maxRPM);  // Restore max speed
-      stepper.moveTo(stepsToMove);  // Move to the first displacement
+      stepper.moveTo(displacementData[0]);  // Move to the first displacement
       return;  // Do nothing if setting displacement data
     }
 
     // check if the motor reaches the distance
     if (stepper.distanceToGo() == 0) {
       stepper.stop();  // Stop the motor
-      Serial.println("Displacement set.");
+      Serial.println(F("Displacement set."));
       isSettingDisplacement = false;  // Exit setting displacement mode
       dataSize = 0; // Reset data size to indicate that no data is left
       stepper.setCurrentPosition(0);
@@ -185,11 +228,8 @@ void updateMotorPosition() {
     startTime = millis();
     return;  // Do nothing if no data or not started
   }
-  float displacement = displacementData[currentIndex];
-  int steps = convertDisplacementToSteps(displacement);
-  stepper.moveTo(steps);
 
-
+  stepper.moveTo(displacementData[currentIndex]);
   currentIndex++;
   if (currentIndex >= dataSize) {
     // Once all data has been executed, reset necessary variables
@@ -198,20 +238,16 @@ void updateMotorPosition() {
     dataSize = 0;           // Reset data size to indicate that no data is left
     endTime = millis();
     // print the time taken to execute the motion
-    Serial.print("Motion completed in ");
+    Serial.print(F("Motion completed in "));
     Serial.print(endTime - startTime);
-    Serial.println(" milliseconds.");
+    Serial.println(F(" milliseconds."));
   }
 }
 
-// Function to convert displacement to motor steps
-int convertDisplacementToSteps(float displacement) {
-  return int(displacement / lead * pulsePerRev);
-}
 
 // Function to change the baud rate dynamically
 void changeBaudRate(long newBaudRate) {
-  Serial.println("Changing baud rate...");
+  Serial.println(F("Changing baud rate..."));
   delay(100);    // Short delay to ensure the message is sent
   Serial.end();  // End the current serial connection
 
