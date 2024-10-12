@@ -26,6 +26,9 @@ unsigned long endTime = 0;
 bool isSettingDisplacement = false;  // Flag to indicate setting displacement data
 bool isCalibrating = false;          // Flag to indicate calibration (moving to left limit)
 
+bool leftLimitReached = false;  // Flag to indicate left limit reached
+bool rightLimitReached = false; // Flag to indicate right limit reached
+
 unsigned long baudRate = 250000;  // Or even higher
 
 void setup() {
