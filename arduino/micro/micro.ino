@@ -26,6 +26,9 @@ unsigned long endTime = 0;
 bool isSettingDisplacement = false;  // Flag to indicate setting displacement data
 bool isCalibrating = false;          // Flag to indicate calibration (moving to left limit)
 
+bool leftLimitReached = false;  // Flag to indicate left limit reached
+bool rightLimitReached = false; // Flag to indicate right limit reached
+
 unsigned long baudRate = 250000;  // Or even higher
 
 void setup() {
@@ -162,10 +165,12 @@ void receiveStepData(String dataString) {
 void updateMotorPosition() {
   
     if (isCalibrating) {
-      if (digitalRead(LEFT_LIMIT_PIN) == LOW ) {  // If left limit switch is triggered
+      if (digitalRead(LEFT_LIMIT_PIN) == LOW && !leftLimitReached)
+      {  // If left limit switch is triggered
         stepper.stop();  // Stop the motor
         stepper.setCurrentPosition(0);
         Serial.print(F("Left limit reached"));
+        leftLimitReached = true;  // Set the flag to indicate that the left limit has been reached
 
 
         // Now move to the right limit
@@ -175,11 +180,13 @@ void updateMotorPosition() {
         return;  // Wait for the next interrupt to check the right limit switch
       }
       
-      if (digitalRead(RIGHT_LIMIT_PIN) == LOW) {  // If right limit switch is triggered
+      if (digitalRead(RIGHT_LIMIT_PIN) == LOW && !rightLimitReached)
+      {  // If right limit switch is triggered
         stepper.stop();  // Stop the motor
         int rightLimitSteps = stepper.currentPosition();  // Record the motor position as the right limit
         Serial.print(F("Right limit reached. Steps: "));
         Serial.println(rightLimitSteps);
+        rightLimitReached = true;  // Set the flag to indicate that the right limit has been reached
 
         // Move to the position based on displacementData[0]
         stepper.setMaxSpeed(pulsePerRev * maxRPM);  // Restore max speed
@@ -187,7 +194,10 @@ void updateMotorPosition() {
         return;
       }
 
-      if (stepper.distanceToGo() == 0) {
+      if (stepper.distanceToGo() == 0) 
+      {
+        leftLimitReached = false;  // Reset the left limit flag
+        rightLimitReached = false; // Reset the right limit flag
         stepper.stop();  // Stop the motor
         Serial.println(F("Completed calibration."));
         isCalibrating = false;  // Exit calibration mode
@@ -199,9 +209,11 @@ void updateMotorPosition() {
     }
   
   if (isSettingDisplacement) {
-    if (digitalRead(LEFT_LIMIT_PIN) == LOW) {  // If left limit switch is triggered
+    if (digitalRead(LEFT_LIMIT_PIN) == LOW && !leftLimitReached) 
+    {  // If left limit switch is triggered
       stepper.stop();  // Stop the motor
       Serial.println(F("Moving to displacementData[0]."));
+      leftLimitReached = true;  // Set the flag to indicate that the left limit has been reached
 
       stepper.setCurrentPosition(0);
 
@@ -213,6 +225,7 @@ void updateMotorPosition() {
 
     // check if the motor reaches the distance
     if (stepper.distanceToGo() == 0) {
+      leftLimitReached = false;  // Reset the left limit flag
       stepper.stop();  // Stop the motor
       Serial.println(F("Displacement set."));
       isSettingDisplacement = false;  // Exit setting displacement mode
