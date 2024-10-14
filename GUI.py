@@ -283,6 +283,7 @@ def send_displacement():
     global arduino
     if arduino and arduino.is_open:
         displacement = displacement_slider.get()
+        displacement = convert_displacement_to_steps(displacement / 1000.0)
         # First, write displacement to arduino and then send the command
         arduino.write(f"{displacement}\n".encode())
         time.sleep(0.1)
@@ -294,6 +295,7 @@ def calibrate_displacement():
     global arduino
     if arduino and arduino.is_open:
         displacement = displacement_slider.get()
+        displacement = convert_displacement_to_steps(displacement / 1000.0)
         arduino.write(f"{displacement}\n".encode())
         time.sleep(0.1)
         arduino.write("CALIBRATE_DISPLACEMENT\n".encode())

@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 import pandas as pd
 
 # Create a directory called "data" if it doesn't exist
-os.makedirs("data", exist_ok=True)
+os.makedirs("../data", exist_ok=True)
 
 # Parameters for the synthetic ground motion
 duration = 3  # Duration of the signal in seconds

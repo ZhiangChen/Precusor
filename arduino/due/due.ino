@@ -128,7 +128,7 @@ void setDisplacementData() {
   // Move the motor slowly to the left until the left limit switch is triggered
   Serial.println(F("Starting moving displacement..."));
   stepper.setMaxSpeed(pulsePerRev/2);  // Slow speed for calibration
-  stepper.moveTo(-(totalLength / lead + 10)* pulsePerRev);  // Move left indefinitely (until the limit switch is hit)
+  stepper.moveTo(-(totalLength + 0.1)/ lead* pulsePerRev);  // Move left indefinitely (until the limit switch is hit)
   isSettingDisplacement = true;  // Set the flag to indicate set_displacement mode
 }
 
@@ -141,7 +141,7 @@ void startCalibration() {
   // First, move to the left limit
   Serial.println(F("Moving to the left limit..."));
 
-  stepper.moveTo(- (totalLength / lead + 10) * pulsePerRev);  // Move left indefinitely (until the limit switch is hit)
+  stepper.moveTo(- (totalLength + 0.1) / lead * pulsePerRev);  // Move left indefinitely (until the limit switch is hit)
   isCalibrating = true;  // Set the flag to indicate calibration mode
 }
 
@@ -175,7 +175,7 @@ void updateMotorPosition() {
         // Now move to the right limit
         Serial.println(F("Moving to the right limit..."));
         stepper.setMaxSpeed(pulsePerRev / 2);  // Slow speed for calibration
-        stepper.moveTo((totalLength / lead + 10) * pulsePerRev);  // Move right indefinitely (until the right limit switch is hit)
+        stepper.moveTo(((totalLength + 0.1)/ lead) * pulsePerRev);  // Move right indefinitely (until the right limit switch is hit)
         return;  // Wait for the next interrupt to check the right limit switch
       }
       
