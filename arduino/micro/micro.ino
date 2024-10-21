@@ -176,7 +176,7 @@ void updateMotorPosition() {
         // Now move to the right limit
         Serial.println(F("Moving to the right limit..."));
         stepper.setMaxSpeed(pulsePerRev / 2);  // Slow speed for calibration
-        stepper.moveTo((totalLength / lead + 10) * pulsePerRev);  // Move right indefinitely (until the right limit switch is hit)
+        stepper.moveTo(((totalLength + 0.1)/ lead) * pulsePerRev);  // Move right indefinitely (until the right limit switch is hit)
         return;  // Wait for the next interrupt to check the right limit switch
       }
       

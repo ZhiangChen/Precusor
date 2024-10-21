@@ -9,6 +9,12 @@ import time
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 
+import random
+import pandas as pd
+from obspy.clients.fdsn import Client
+from obspy import UTCDateTime
+from obspy.geodetics import gps2dist_azimuth
+
 # Initialize global variables
 displacement_data = np.array([])  # Array to store displacement data
 arduino = None
@@ -134,10 +140,26 @@ def load_csv_file():
         try:
             # Load the CSV file using pandas
             df = pd.read_csv(file_path)
-            
-            # Assuming the CSV has 'Time (s)' and 'Displacement (m)' columns
-            time = df['Time (s)'].values
-            displacement = df['Displacement (m)'].values
+
+            # Clean up the headers in case there are extra spaces or invisible characters
+            df.columns = df.columns.str.strip()
+
+            # Try to match the columns more flexibly (ignoring spaces and casing issues)
+            possible_time_columns = [col for col in df.columns if "time" in col.lower()]
+            possible_displacement_columns = [col for col in df.columns if "displacement" in col.lower()]
+
+            # Check if we found valid columns
+            if not possible_time_columns or not possible_displacement_columns:
+                messagebox.showerror("Error", "Required columns not found.")
+                return
+
+            # Use the first matching columns
+            time_column = possible_time_columns[0]
+            displacement_column = possible_displacement_columns[0]
+
+            # Extract time and displacement values
+            time = df[time_column].values
+            displacement = df[displacement_column].values
 
             # Combine time and displacement into a 2D array
             displacement_data = np.column_stack((time, displacement))
@@ -147,6 +169,7 @@ def load_csv_file():
             
         except Exception as e:
             messagebox.showerror("Error", f"Failed to load CSV: {e}")
+
 
 def convert_displacement_to_steps(displacement):
     """
@@ -161,32 +184,6 @@ def convert_displacement_to_steps(displacement):
     return (displacement / lead * pulsePerRev).astype(int) if isinstance(displacement, np.ndarray) else int(displacement / lead * pulsePerRev)
 
 
-# # Function to send data to Arduino
-# def send_data():
-#     global displacement_data
-#     # check if there is data to send, check the shape of the array
-#     if displacement_data.size == 0:
-#         messagebox.showwarning("No Data", "No data to send. Please generate or load ground motion data.")
-#         return
-
-#     steps_all = convert_displacement_to_steps(displacement_data[:, 1])
-
-#     # examine if any steps in steps_all are within the limits. Int type in ardunio is 16 bit, which is 32767
-#     if any(np.abs(steps_all) > 32767):
-#         messagebox.showerror("Error", "Displacement exceeds the maximum limit. Please reduce the displacement.")
-#         return
-
-#     if arduino and arduino.is_open:
-#         # Send the displacement data to Arduino
-#         for steps in steps_all:
-#             arduino.write(f"{steps}\n".encode())
-#             time.sleep(1/float(baud_var.get()))  # Set a delay based on the baud rate to ensure proper transmission
-        
-#         messagebox.showinfo("Success", "Data sent to Arduino. Start the experiment.")
-#         # After sending all data, send a "START" command
-#         arduino.write("START\n".encode())
-#     else:
-#         messagebox.showerror("Error", "Arduino is not connected.")
 
 # Function to send data to Arduino with confirmation before starting the experiment
 def send_data():
@@ -199,6 +196,10 @@ def send_data():
     try:
         # Extract all displacement values from the second column (index 1)
         displacements = displacement_data[:, 1]
+
+        # if displacement exceeds the total length of the shakebot [-0.6, 0.6], show an error message
+        if np.any(np.abs(displacements) > totalLength):
+            messagebox.showerror("Error", "Displacement exceeds the maximum limit. Please reduce the displacement.")
 
         # Convert all displacements to step counts
         steps_all = convert_displacement_to_steps(displacements)
@@ -266,7 +267,9 @@ def plot_data(data=None):
         displacement = data[:, 1]
         ax.plot(time_steps, displacement)
         ax.set_title('Ground Motion Displacement')
-        ax.set_xlabel('Time Steps')
+        ax.set_xlabel('Time Steps (s)')
+        ax.set_ylabel('Displacement (m)')
+
 
     # add grid with minor ticks and dashed lines
     ax.grid(which='both', linestyle='--')
@@ -303,17 +306,198 @@ def calibrate_displacement():
     else:
         messagebox.showerror("Error", "Arduino is not connected.")
 
+def download_iris_data():
+    def fetch_iris_data():
+        global displacement_data
+        try:
+            # Get the duration from the user
+            duration = float(duration_entry.get())
+            if duration <= 0:
+                raise ValueError("Duration must be a positive number.")
+            
+            # Initialize a client to download data from IRIS
+            client = Client("IRIS")
+
+            # Define a random time range for event search (past 5 years)
+            end_time = UTCDateTime()  # Current time
+            start_time = end_time - (365 * 5 * 24 * 60 * 60)  # 5 years ago
+
+            # Fetch random events in the given time range (min magnitude 6.0 for example)
+            cat = client.get_events(starttime=start_time, endtime=end_time, minmagnitude=6.0, limit=50)
+            
+            if not cat:
+                messagebox.showerror("Error", "No events found in the specified time range.")
+                return
+
+            # Randomly select an event from the fetched catalog
+            event = random.choice(cat)
+            origin = event.origins[0]
+            event_time = origin.time
+            eq_lat = origin.latitude
+            eq_lon = origin.longitude
+            eq_depth = origin.depth / 1000  # Depth in km
+            magnitude = event.magnitudes[0].mag
+
+            print(f"Random Event Selected: Time: {event_time}, Lat: {eq_lat}, Lon: {eq_lon}, Depth: {eq_depth} km, Mag: {magnitude}")
+
+            # Define the station details (ANMO as an example)
+            network = "IU"
+            station = "ANMO"
+            location = "00"
+            # Fetch only horizontal components BH1 and BH2
+            channels = ["BH1", "BH2"]
+            inv = client.get_stations(network=network, station=station, level="station")
+            station_lat = inv[0][0].latitude
+            station_lon = inv[0][0].longitude
+
+            # Calculate the distance between the earthquake and the station (in meters)
+            distance_m, az, baz = gps2dist_azimuth(eq_lat, eq_lon, station_lat, station_lon)
+            distance_km = distance_m / 1000  # Convert to kilometers
+
+            # Assume an average P-wave velocity of 6 km/s
+            p_wave_velocity = 6.0  # km/s
+
+            # Calculate the P-wave travel time (distance / velocity)
+            p_wave_travel_time = distance_km / p_wave_velocity
+            p_wave_arrival_time = event_time + p_wave_travel_time
+
+            # Define the pre-filter for response removal (this should match the frequency range of interest)
+            pre_filt = (0.01, 0.02, 30.0, 35.0)  # Lowpass and highpass filter corner frequencies
+
+            # Download waveform data for horizontal components (BH1 and BH2)
+            start_time = event_time
+            end_time = p_wave_arrival_time + duration  # Dynamic duration based on user input
+            st = client.get_waveforms(network, station, location, ",".join(channels), start_time, end_time)
+
+            # Download the instrument response information
+            inv = client.get_stations(network=network, station=station, location=location, 
+                                      channel="BH*", starttime=start_time, endtime=end_time, level="response")
+
+            # Remove the instrument response to convert the raw data to acceleration (m/s²)
+            st.remove_response(inventory=inv, output="ACC", pre_filt=pre_filt)
+
+            # Convert acceleration to displacement by performing double integration
+            st_disp = st.copy()
+            st_disp.integrate()  # First integration to get velocity
+            st_disp.integrate()  # Second integration to get displacement
+
+            # Resample the data to 100 Hz (if the original sampling rate is different)
+            target_sampling_rate = 100.0  # Desired frequency in Hz
+            for tr in st_disp:
+                tr.resample(sampling_rate=target_sampling_rate)
+
+            # Trim the waveform to the duration after the P-wave arrival
+            for tr in st_disp:
+                tr.trim(starttime=p_wave_arrival_time, endtime=p_wave_arrival_time + duration)
+
+            # Prepare the horizontal displacement data for plotting (BH1 and BH2)
+            displacement_data_ = []
+            for tr in st_disp:
+                time = tr.times(reftime=p_wave_arrival_time)
+                displacement = tr.data
+                displacement_data_.append([time, displacement])
+
+            # Close the window
+            new_window.destroy()
+
+            # Combine the time and displacement data into a single array for plotting
+            combined_displacement_data = np.column_stack(displacement_data_[0])  # Assume plotting BH1 channel
+            plot_data(combined_displacement_data)
+            displacement_data = combined_displacement_data
+
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to download and process data: {e}")
+
+    # Create a new window for the user to input the duration
+    new_window = tk.Toplevel(root)
+    new_window.title("Download IRIS Data")
+    new_window.geometry("300x150")
+
+    # Label and entry for the duration input
+    tk.Label(new_window, text="Enter Duration (seconds):").pack(pady=10)
+    duration_entry = tk.Entry(new_window)
+    duration_entry.pack(pady=5)
+
+    # Button to start the data download process
+    fetch_button = tk.Button(new_window, text="Download Data", command=fetch_iris_data)
+    fetch_button.pack(pady=10)
+
+def generate_random_data():
+    def generate_and_return_data():
+        try:
+            # Get the duration input from the user
+            duration = float(duration_entry.get())
+            if duration <= 0:
+                raise ValueError("Duration must be a positive number.")
+            
+            # duration must be less than 150 seconds
+            if duration >= 150:
+                raise ValueError("Duration must be less than 150 seconds.")
+            
+            # Parameters for the synthetic ground motion
+            sampling_rate = 100  # Sampling rate in Hz (100 samples per second)
+            time = np.arange(0, duration, 1/sampling_rate)  # Time array
+
+            # Generate random frequencies and amplitudes
+            num_frequencies = np.random.randint(3, 6)  # Random number of frequency components (between 3 and 5)
+            frequencies = np.random.uniform(0.5, 5.0, num_frequencies)  # Frequencies between 0.5 Hz and 5 Hz
+            amplitudes = np.random.uniform(0.01, 0.05, num_frequencies)  # Amplitudes between 0.01 and 0.05 meters
+
+            # Generate random phase shifts
+            phases = np.random.uniform(0, 2 * np.pi, num_frequencies)
+
+            # Generate a synthetic displacement signal with random frequencies, amplitudes, and phases
+            displacement = np.zeros_like(time)
+            for freq, amp, phase in zip(frequencies, amplitudes, phases):
+                displacement += amp * np.sin(2 * np.pi * freq * time + phase)
+
+            # Add a decaying envelope to simulate how seismic waves taper off over time
+            decay_rate = np.random.uniform(0.01, 0.05)  # Random decay rate between 0.01 and 0.05
+            envelope = np.exp(-decay_rate * time)
+            displacement *= envelope
+
+            # Add random noise to simulate real-world variability
+            noise_amplitude = np.random.uniform(0.002, 0.01)  # Random noise amplitude between 0.002 and 0.01
+            displacement += noise_amplitude * np.random.randn(len(time))
+
+            # Combine time and displacement into a 2D array
+            global displacement_data
+            displacement_data = np.column_stack((time, displacement))
+
+            # Close the window
+            new_window.destroy()
+
+            # Plot the generated data
+            plot_data(displacement_data)
+
+        except ValueError:
+            messagebox.showerror("Error", "Please enter a valid duration (positive number less than 150 seconds).")
+
+    # Create a new window for duration input
+    new_window = tk.Toplevel(root)
+    new_window.title("Generate Random Data")
+    new_window.geometry("300x150")
+
+    # Label and entry for duration input
+    tk.Label(new_window, text="Enter Duration (seconds):").pack(pady=10)
+    duration_entry = tk.Entry(new_window)
+    duration_entry.pack(pady=5)
+
+    # Generate button in the new window
+    generate_button = tk.Button(new_window, text="Generate Data", command=generate_and_return_data)
+    generate_button.pack(pady=10)
+
 # Main function to create the GUI
 def main():
-    global plot_frame, connect_button, status_light, serial_text, displacement_slider, com_combobox, com_var
+    global plot_frame, connect_button, status_light, serial_text, displacement_slider, com_combobox, com_var, root
 
     # Create the main application window
     root = tk.Tk()
     root.title("Seismove Shakebot v2.0")
-    root.geometry("1250x650")  # Set the default window size (increased height for the text widget)
+    root.geometry("1350x700")  # Set the default window size (increased height for the text widget)
 
     # Configure grid layout weights to allow resizing
-    for i in range(19):  # Increased row count for new text widget
+    for i in range(20):  # Increased row count for new text widget
         root.grid_rowconfigure(i, weight=1)
     root.grid_columnconfigure(0, weight=1)
     root.grid_columnconfigure(1, weight=1)
@@ -404,14 +588,22 @@ def main():
     ttk.Separator(control_frame, orient="horizontal").grid(row=14, column=0, columnspan=2, sticky="ew", padx=10, pady=5)
     tk.Label(control_frame, text="Option 2").grid(row=15, column=0, columnspan=2, padx=10, pady=5)
 
+    # Button to download IRIS earthquake data 
+    download_button = tk.Button(control_frame, text="Download IRIS Data", command=download_iris_data)
+    download_button.grid(row=16, column=0, columnspan=1, padx=10, pady=5, sticky="ew")
+
+    # Button to generate random earthquake data
+    random_button = tk.Button(control_frame, text="Generate Random Data", command=generate_random_data)
+    random_button.grid(row=16, column=1, columnspan=1, padx=10, pady=5, sticky="ew")
+
     # Button to load CSV ground motion file (Option 2)
     load_button = tk.Button(control_frame, text="Load CSV Ground Motion File", command=load_csv_file)
-    load_button.grid(row=16, column=0, columnspan=2, padx=10, pady=5, sticky="ew")
+    load_button.grid(row=17, column=0, columnspan=2, padx=10, pady=5, sticky="ew")
 
     # Button to send data to Arduino
-    ttk.Separator(control_frame, orient="horizontal").grid(row=17, column=0, columnspan=2, sticky="ew", padx=10, pady=5)
+    ttk.Separator(control_frame, orient="horizontal").grid(row=18, column=0, columnspan=2, sticky="ew", padx=10, pady=5)
     send_button = tk.Button(control_frame, text="Send Data to Arduino", command=send_data)
-    send_button.grid(row=18, column=0, columnspan=2, padx=10, pady=5, sticky="ew")
+    send_button.grid(row=19, column=0, columnspan=2, padx=10, pady=5, sticky="ew")
 
     # Initialize an empty plot
     plot_data()
