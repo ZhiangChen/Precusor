@@ -7,7 +7,7 @@ import pandas as pd
 os.makedirs("../data", exist_ok=True)
 
 # Parameters for the synthetic ground motion
-duration = 3  # Duration of the signal in seconds
+duration = 10  # Duration of the signal in seconds
 sampling_rate = 100  # Sampling rate in Hz (100 samples per second)
 time = np.arange(0, duration, 1/sampling_rate)  # Time array
 
