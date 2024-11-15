@@ -26,7 +26,7 @@ sample_rate = 100  # Default sample rate
 pulsePerRev = 200 # Number of steps per revolution
 maxRPM = 1200 # Increase maximum speed in RPM
 lead = 0.02 # Distance traveled per revolution in meters
-maxAcceleration = 1.1 # Maximum acceleration in g
+maxAcceleration = 5.1 # Maximum acceleration in g
 totalLength = 0.6 # Total length of the shakebot in meters
 
 

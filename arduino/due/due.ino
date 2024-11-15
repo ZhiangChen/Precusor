@@ -11,7 +11,7 @@ AccelStepper stepper(AccelStepper::DRIVER, STEP_PIN, DIR_PIN);  // Use AccelStep
 int pulsePerRev = 200;        // Number of steps per revolution
 float maxRPM = 1200;          // Increase maximum speed in RPM
 float lead = 0.02;            // Distance traveled per revolution in meters
-float maxAcceleration = 1.1;  // Maximum acceleration in g
+float maxAcceleration = 5.1;  // Maximum acceleration in g
 float totalLength = 0.6;      // Total length of the shakebot in meters
 
 const int maxDisplacement = 100*150;                   // Maximum number of displacement points to handle
